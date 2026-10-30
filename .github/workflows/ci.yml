@@ -14,11 +14,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
       - name: Check for accidentally committed secret files
         shell: bash
         run: |
@@ -27,30 +22,29 @@ jobs:
             echo "::error::Potential secret or private key file found in repository."
             exit 1
           fi
-      - name: Install dependencies
+      - name: Set up Node.js when a Node project exists
+        if: hashFiles('package.json') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install npm dependencies
         if: hashFiles('package-lock.json') != ''
         run: npm ci
       - name: Run tests when configured
         if: hashFiles('package.json') != ''
         shell: bash
         run: |
-          node -e "const p=require('./package.json'); process.exit(p.scripts?.test ? 0 : 1)" && npm test -- --runInBand || {
-            code=$?
-            if [ "$code" -eq 1 ] && ! node -e "process.exit(require('./package.json').scripts?.test ? 0 : 1)"; then
-              echo "No test script configured; skipping."
-            else
-              exit "$code"
-            fi
-          }
+          if node -e "process.exit(require('./package.json').scripts?.test ? 0 : 1)"; then
+            npm test
+          else
+            echo "No test script configured; skipping."
+          fi
       - name: Build when configured
         if: hashFiles('package.json') != ''
         shell: bash
         run: |
-          node -e "process.exit(require('./package.json').scripts?.build ? 0 : 1)" && npm run build || {
-            code=$?
-            if [ "$code" -eq 1 ] && ! node -e "process.exit(require('./package.json').scripts?.build ? 0 : 1)"; then
-              echo "No build script configured; skipping."
-            else
-              exit "$code"
-            fi
-          }
+          if node -e "process.exit(require('./package.json').scripts?.build ? 0 : 1)"; then
+            npm run build
+          else
+            echo "No build script configured; skipping."
+          fi
